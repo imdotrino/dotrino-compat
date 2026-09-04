@@ -4,7 +4,10 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { declare, check, isBroken, incompatibleNotice, UNDECLARED_UNTIL, OK, UNDECLARED, BROKEN_PEER, INCOMPATIBLE_PROTOCOL } from '../src/index.js'
+import {
+  declare, check, isBroken, incompatibleNotice, STRICT_BY_DEFAULT,
+  OK, UNDECLARED, BROKEN_PEER, INCOMPATIBLE_PROTOCOL
+} from '../src/index.js'
 
 const boveda = declare({ product: 'vaultd', version: '0.106.2', protocol: 3, speaks: [2, 3] })
 const agente = declare({ product: 'remote-agent', version: '0.5.3', protocol: 3, speaks: [3] })
@@ -21,47 +24,66 @@ test('dos que hablan lo mismo trabajan', () => {
   assert.equal(r.code, OK)
 })
 
-test('sin protocolo en común NO se trabaja, y los DOS lados dicen lo mismo', () => {
-  const a = check({ mine: boveda, theirs: viejo })
-  const b = check({ mine: viejo, theirs: boveda })
-  assert.equal(a.ok, false)
-  assert.equal(b.ok, false, 'si uno rechaza y el otro no, vuelve el estado a medias')
-  assert.equal(a.code, INCOMPATIBLE_PROTOCOL)
-  assert.equal(b.code, INCOMPATIBLE_PROTOCOL)
+/**
+ * DECIDE LA VERSIÓN QUE ENTRA (dueño, 2026-09-04): una build de hace tres meses no sabe
+ * nada de lo que vino después, así que preguntarle su opinión es preguntarle a quien no
+ * puede saber. Quien juzga es quien tiene la lista al día.
+ */
+test('decide el que entra: yo te juzgo con mi lista, no te pregunto', () => {
+  const r = check({ mine: boveda, theirs: viejo })
+  assert.equal(r.ok, false)
+  assert.equal(r.code, INCOMPATIBLE_PROTOCOL)
+  assert.match(r.reason, /update remote-agent/, 'el rechazo dice a quién hay que actualizar')
+})
+
+test('el viejo no tiene voto: si YO le entiendo, trabajamos', () => {
+  const nuevo = declare({ product: 'vaultd', version: '0.107.0', protocol: 2, speaks: [1, 2] })
+  const antiguo = declare({ product: 'remote-agent', version: '0.4.0', protocol: 1, speaks: [1] })
+  assert.equal(check({ mine: nuevo, theirs: antiguo }).ok, true,
+    'exigir acuerdo mutuo era pedirle su opinión a quien no puede tenerla')
 })
 
 test('una versión marcada rota se rechaza aunque el protocolo cuadre', () => {
-  const rotas = [{ product: 'remote-agent', versions: ['0.5.3'], why: 'pierde el código del error al envolverlo', since: '2026-09-04' }]
+  const rotas = [{ product: 'remote-agent', versions: ['0.5.3'], why: 'pierde el código del error al envolverlo', fix: 'sube a 0.5.4' }]
   const r = check({ mine: boveda, theirs: agente, broken: rotas })
   assert.equal(r.ok, false)
   assert.equal(r.code, BROKEN_PEER)
   assert.match(r.reason, /pierde el código del error/, 'el porqué viaja con el rechazo')
+  assert.match(r.reason, /sube a 0\.5\.4/, 'y qué hacer')
 })
 
-test('la lista de rotas va por versión EXACTA: no adivina rangos', () => {
+test('la lista de rotas admite exactas, listas y rangos — el MISMO comparador', () => {
   const rotas = [{ product: 'vaultd', versions: ['0.99.0', '0.100.1'], why: 'x' }]
   assert.ok(isBroken(rotas, { product: 'vaultd', version: '0.99.0' }))
   assert.equal(isBroken(rotas, { product: 'vaultd', version: '0.100.0' }), null)
   assert.equal(isBroken(rotas, { product: 'otro', version: '0.99.0' }), null)
+
+  const porRango = [{ product: 'content', versions: '<=0.3.3', why: 'no sella' }]
+  assert.ok(isBroken(porRango, { product: 'content', version: '0.3.3' }))
+  assert.equal(isBroken(porRango, { product: 'content', version: '0.4.0' }), null)
+
+  const raro = [{ product: 'content', versions: '^0.3.0', why: 'x' }]
+  assert.equal(isBroken(raro, { product: 'content', version: '0.3.3' }), null,
+    'lo que no se entiende no marca roto, pero tampoco absuelve: no dice nada')
 })
 
 /**
- * EL REPLIEGUE DE MIGRACIÓN, que es el único permitido: declarado, acotado y con fecha.
- * Hoy no lo anuncia nadie; cortar a quien calla el día uno apaga el ecosistema entero para
- * arreglar que a veces se apaga solo.
+ * ESTRICTO EN ESTA ETAPA (dueño, 2026-09-04). Quien no dice qué es, no trabaja. Nada de
+ * ventana de gracia: la mitad del valor de esto es obligar a que todas las piezas
+ * declaren, y una tolerancia consigue justo lo contrario — que nadie se entere de que le
+ * falta declarar.
  */
-test('a quien no dice qué es se le atiende, pero solo hasta la fecha', () => {
-  const antes = check({ mine: boveda, theirs: null, now: UNDECLARED_UNTIL - 1 })
-  assert.equal(antes.ok, true)
-  assert.equal(antes.code, UNDECLARED, 'se atiende, pero queda dicho que no declaró')
-
-  const despues = check({ mine: boveda, theirs: null, now: UNDECLARED_UNTIL })
-  assert.equal(despues.ok, false, 'pasada la fecha, callar es incompatible')
-  assert.equal(despues.code, UNDECLARED)
+test('quien no dice qué es, no trabaja', () => {
+  const r = check({ mine: boveda, theirs: null })
+  assert.equal(r.ok, false)
+  assert.equal(r.code, UNDECLARED)
 })
 
-test('la ventana de migración tiene fecha escrita, y no se mueve sola', () => {
-  assert.equal(new Date(UNDECLARED_UNTIL).toISOString().slice(0, 10), '2026-12-01')
+test('estricto es el DEFAULT, y aflojarlo es una decisión explícita', () => {
+  assert.equal(STRICT_BY_DEFAULT, true, 'se relaja cuando el producto esté estable, no antes')
+  const flojo = check({ mine: boveda, theirs: null, strict: false })
+  assert.equal(flojo.ok, true)
+  assert.equal(flojo.code, UNDECLARED, 'aunque pase, queda dicho que no declaró')
 })
 
 test('el aviso dice qué eres tú, qué soy yo y qué hacer', () => {

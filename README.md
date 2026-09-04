@@ -64,15 +64,6 @@ detectado hoy solo frena a la versión mala allí donde alguien instale la que l
 - **`version`** identifica la build. Es lo que decide *si esta build concreta está rota*.
   Una versión rota suele hablar el protocolo correcto — por eso el entero no basta.
 
-### La comparación de protocolo es simétrica; la lista de rotas no
-
-Los dos lados anuncian `protocol` y `speaks`, así que los dos llegan a la misma respuesta.
-Eso importa: si uno trabaja y el otro rechaza, vuelve el estado a medias del que venimos.
-
-La lista de rotas no puede ser simétrica: quien sabe que la 0.99.0 está rota es el nuevo; el
-viejo no sabe nada de sí mismo. **Por eso el rechazo se dice** — el que rechaza es el único
-que puede enterar al otro.
-
 ### La lista de rotas va por versión EXACTA
 
 Nada de rangos. Un rango pide un comparador de semver, y uno mal escrito es peor que no
@@ -85,14 +76,31 @@ const MIS_ROTAS = [
 ]
 ```
 
-### Quien no declara nada: repliegue de migración, con fecha
+### Estricto ahora, y se relaja cuando el producto esté estable
 
-Hoy no lo anuncia nadie. Cortar a quien calla el día uno apaga el ecosistema entero para
-arreglar que a veces se apaga solo. Así que hasta **2026-12-01** se le atiende y queda
-dicho (`code: 'undeclared'`); a partir de ahí, callar es incompatible.
+Decidido por el dueño el 2026-09-04: *«la incompatibilidad debe ser estricta en esta etapa
+de dev, y vamos a irla relajando mientras se estabilice el producto»*.
 
-Es la única clase de repliegue permitida por `CLAUDE.md`: declarado, acotado y con fecha —
-y con un test que la fija, para que no se mueva sola.
+Estricto significa **quien no dice qué es, no trabaja**. Sin ventana de gracia: la mitad
+del valor de esto es obligar a que todas las piezas declaren, y una tolerancia consigue
+justo lo contrario — que nadie se entere de que le falta declarar. Se afloja con
+`strict: false`, que es una decisión de producto, no un default que se cuela.
+
+⚠️ **El orden de despliegue no es un detalle.** El día que una pieza empieza a comprobar,
+deja de hablar con todo el que aún no anuncia. Así que: **primero anunciar en todas partes,
+encender la comprobación después.**
+
+### Decide la versión que ENTRA
+
+*«El que define si es compatible o no es la versión que entra, ya que la versión antigua de
+un producto no tiene idea con qué es o no compatible»* (dueño, 2026-09-04).
+
+Es exacto: una build de hace tres meses no sabe nada de lo que vino después. Así que la
+comprobación **no es simétrica y no debe serlo** — miro si YO te entiendo y si TÚ estás en
+mi lista de rotas; lo que tú creas de mí no entra en la cuenta.
+
+Y de ahí sale por qué el punto 3 es la otra mitad y no un adorno: si el viejo no puede
+juzgar, tampoco puede enterarse solo. **El que rechaza es el único que puede decírselo.**
 
 ## Qué NO hace
 

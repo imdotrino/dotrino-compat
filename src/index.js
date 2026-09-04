@@ -22,22 +22,31 @@
  */
 
 /** Lo que responde `check`. El `code` es lo que se compara; el texto puede cambiar. */
+import { satisfies } from './ranges.js'
+
 export const OK = 'ok'
 export const INCOMPATIBLE_PROTOCOL = 'incompatible-protocol'
 export const BROKEN_PEER = 'broken-peer'
 export const UNDECLARED = 'undeclared'
 
 /**
- * HASTA CUÁNDO SE ATIENDE A QUIEN NO DICE QUÉ ES.
+ * ESTRICTO MIENTRAS ESTO SE ESTÁ HACIENDO (dueño, 2026-09-04): *«la incompatibilidad debe
+ * ser estricta en esta etapa de dev, y vamos a irla relajando mientras se estabilice el
+ * producto»*.
  *
- * Es un REPLIEGUE DE MIGRACIÓN, declarado y con fecha, que es la única clase permitida
- * (`CLAUDE.md`, «nada de repliegues»). Hoy no lo anuncia nadie: si el día uno se corta a
- * quien calla, se apaga el ecosistema entero para arreglar que a veces se apaga solo.
+ * Estricto significa: **quien no dice qué es, no trabaja**. No hay ventana de gracia ni
+ * fecha de caducidad — eso sería un repliegue, y además el que menos conviene ahora: la
+ * mitad del valor de esto es obligar a que todas las piezas declaren, y una tolerancia
+ * hace justo lo contrario, que nadie se entere de que le falta declarar.
  *
- * A partir de esta fecha, callar es incompatible. No se mueve «porque falta gente»: si
- * falta gente, es que la migración no se hizo, y para eso está el índice.
+ * Se relaja con `strict: false`, y eso es una decisión de producto que se toma cuando esté
+ * estable — no un default que se cuela.
+ *
+ * ⚠️ **Consecuencia operativa, que no es un detalle:** el día que una pieza empieza a
+ * comprobar, deja de hablar con todo el que aún no anuncia. Así que el orden de
+ * despliegue es **primero anunciar en todas partes, y encender la comprobación después**.
  */
-export const UNDECLARED_UNTIL = Date.UTC(2026, 11, 1)   // 2026-12-01
+export const STRICT_BY_DEFAULT = true
 
 /** ¿Tiene forma de anuncio? No dice si es compatible, solo si se puede juzgar. */
 export function isDeclaration (d) {
@@ -60,47 +69,53 @@ export function declare ({ product, version, protocol, speaks }) {
 /**
  * ¿ESTE PAR ESTÁ EN LA LISTA DE ROTAS?
  *
- * Por VERSIÓN EXACTA y no por rango, a propósito. Un rango pide un comparador de semver, y
- * un comparador de semver mal escrito es peor que no tenerlo: falla en silencio y del lado
- * que no toca. Una build rota siempre es una versión publicada concreta, así que se nombra.
+ * `versions` acepta lo mismo que un rango del manifiesto (`ranges.js`): una versión
+ * exacta, un `>=`, un intervalo `a - b`, o una lista que es un O. El dueño pidió rangos
+ * para los manifiestos (2026-09-04) y aquí se usa el MISMO comparador, no otro: dos formas
+ * de decir «esta versión entra» acaban discrepando, y esa discrepancia no hace ruido.
+ *
+ * Lo que no se entiende no coincide — no marca roto y tampoco absuelve: solo no dice nada.
  */
 export function isBroken (lista, { product, version }) {
   for (const b of lista || []) {
     if (b?.product !== product) continue
-    if ((b.versions || []).includes(version)) return b
+    if (satisfies(version, b.versions)) return b
   }
   return null
 }
 
 /**
- * ¿PODEMOS TRABAJAR?
+ * ¿TE ACEPTO?
  *
- * La comparación de protocolo es SIMÉTRICA —cada uno mira si el otro habla lo suyo Y si él
- * habla lo del otro— para que los dos lados lleguen a la misma respuesta. Si no, se llega a
- * lo peor de todo: uno trabaja y el otro rechaza, que es el estado a medias del que venimos.
+ * **DECIDE LA VERSIÓN QUE ENTRA, no las dos** (dueño, 2026-09-04): *«el que define si es
+ * compatible o no es la versión que entra, ya que la versión antigua de un producto no
+ * tiene idea con qué es o no compatible»*. Y es exacto: una build de hace tres meses no
+ * sabe nada de lo que vino después, así que preguntarle su opinión es preguntarle a quien
+ * no puede saber. Quien juzga es quien tiene la lista al día — el que llega.
  *
- * La lista de rotas NO es simétrica, y no puede serlo: el que sabe que la 0.99.0 está rota
- * es el nuevo; el viejo no sabe nada de sí mismo. Por eso el rechazo se DICE (punto 3 del
- * dueño): el que rechaza es el único que puede enterar al otro.
+ * Por eso esto NO es simétrico y no debe serlo: miro si YO te entiendo y si TÚ estás en mi
+ * lista de rotas. Lo que tú creas de mí no entra en la cuenta.
  *
- * @param {object} o.mine    mi declaración
- * @param {object} o.theirs  la del otro (o null/undefined si no dijo nada)
- * @param {Array}  [o.broken] mi lista de versiones rotas
- * @param {number} [o.now]
+ * Y por eso el punto 3 del dueño es la otra mitad y no un adorno: si el viejo no puede
+ * juzgar, tampoco puede enterarse solo. **El que rechaza es el único que puede decírselo**,
+ * y por eso se avisa en vez de callar (`incompatibleNotice`).
+ *
+ * @param {object}  o.mine     mi declaración
+ * @param {object}  o.theirs   la del otro (o null si no dijo nada)
+ * @param {Array}   [o.broken] mi lista de versiones rotas (código + aviso de la red)
+ * @param {boolean} [o.strict] `false` afloja lo de «quien no declara no trabaja»
  * @returns {{ok:boolean, code:string, reason:string, peer:object|null}}
  */
-export function check ({ mine, theirs, broken = [], now = Date.now() } = {}) {
+export function check ({ mine, theirs, broken = [], strict = STRICT_BY_DEFAULT } = {}) {
   if (!isDeclaration(mine)) throw new Error('compat: my own declaration is not valid')
 
   if (!isDeclaration(theirs)) {
-    const vencido = now >= UNDECLARED_UNTIL
     return {
-      ok: !vencido,
+      ok: !strict,
       code: UNDECLARED,
       peer: null,
-      reason: vencido
-        ? 'the other side does not say what it is or which version it runs, and the migration window is over'
-        : 'the other side does not say what it is or which version it runs (tolerated until the migration window closes)'
+      reason: 'the other side does not say what it is or which version it runs' +
+        (strict ? '' : ' (tolerated: this side is not strict)')
     }
   }
 
@@ -110,19 +125,20 @@ export function check ({ mine, theirs, broken = [], now = Date.now() } = {}) {
       ok: false,
       code: BROKEN_PEER,
       peer: theirs,
-      reason: `${theirs.product} ${theirs.version} is known to be broken: ${roto.why || 'no reason recorded'}`
+      reason: `${theirs.product} ${theirs.version} is known to be broken: ${roto.why || 'no reason recorded'}` +
+        (roto.fix ? ` — ${roto.fix}` : '')
     }
   }
 
-  const leEntiendo = mine.speaks.includes(theirs.protocol)
-  const meEntiende = theirs.speaks.includes(mine.protocol)
-  if (!leEntiendo || !meEntiende) {
+  // SOLO MI LADO DECIDE: si entiendo su protocolo, trabajamos. Lo que él entienda del mío
+  // no se pregunta — no puede saberlo si es más viejo que yo.
+  if (!mine.speaks.includes(theirs.protocol)) {
     return {
       ok: false,
       code: INCOMPATIBLE_PROTOCOL,
       peer: theirs,
       reason: `${mine.product} ${mine.version} speaks protocol ${mine.speaks.join(', ')} and ` +
-        `${theirs.product} ${theirs.version} speaks ${theirs.speaks.join(', ')}: no version in common`
+        `${theirs.product} ${theirs.version} speaks ${theirs.protocol}: update ${theirs.product}`
     }
   }
 
@@ -150,4 +166,4 @@ export function incompatibleNotice ({ mine, theirs, verdict }) {
   }
 }
 
-export default { declare, check, isBroken, isDeclaration, incompatibleNotice, OK, INCOMPATIBLE_PROTOCOL, BROKEN_PEER, UNDECLARED, UNDECLARED_UNTIL }
+export default { declare, check, isBroken, isDeclaration, incompatibleNotice, OK, INCOMPATIBLE_PROTOCOL, BROKEN_PEER, UNDECLARED, STRICT_BY_DEFAULT }

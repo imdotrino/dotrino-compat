@@ -1,13 +1,14 @@
 {
   "name": "@dotrino/compat",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Qué versión eres y si podemos trabajar: el contrato de compatibilidad del ecosistema Dotrino.",
   "license": "MIT",
   "type": "module",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./advisory": "./src/advisory.js"
+    "./advisory": "./src/advisory.js",
+    "./ranges": "./src/ranges.js"
   },
   "files": [
     "src",
