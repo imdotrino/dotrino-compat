@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  declare, check, isBroken, incompatibleNotice, STRICT_BY_DEFAULT,
+  declare, check, isBroken, incompatibleNotice, annotate,
   OK, UNDECLARED, BROKEN_PEER, INCOMPATIBLE_PROTOCOL
 } from '../src/index.js'
 
@@ -20,7 +20,7 @@ test('una declaración tiene que incluirse a sí misma en lo que habla', () => {
 
 test('dos que hablan lo mismo trabajan', () => {
   const r = check({ mine: boveda, theirs: agente })
-  assert.equal(r.ok, true)
+  assert.equal(r.compatible, true)
   assert.equal(r.code, OK)
 })
 
@@ -31,7 +31,7 @@ test('dos que hablan lo mismo trabajan', () => {
  */
 test('decide el que entra: yo te juzgo con mi lista, no te pregunto', () => {
   const r = check({ mine: boveda, theirs: viejo })
-  assert.equal(r.ok, false)
+  assert.equal(r.compatible, false)
   assert.equal(r.code, INCOMPATIBLE_PROTOCOL)
   assert.match(r.reason, /update remote-agent/, 'el rechazo dice a quién hay que actualizar')
 })
@@ -39,14 +39,14 @@ test('decide el que entra: yo te juzgo con mi lista, no te pregunto', () => {
 test('el viejo no tiene voto: si YO le entiendo, trabajamos', () => {
   const nuevo = declare({ product: 'vaultd', version: '0.107.0', protocol: 2, speaks: [1, 2] })
   const antiguo = declare({ product: 'remote-agent', version: '0.4.0', protocol: 1, speaks: [1] })
-  assert.equal(check({ mine: nuevo, theirs: antiguo }).ok, true,
+  assert.equal(check({ mine: nuevo, theirs: antiguo }).compatible, true,
     'exigir acuerdo mutuo era pedirle su opinión a quien no puede tenerla')
 })
 
 test('una versión marcada rota se rechaza aunque el protocolo cuadre', () => {
   const rotas = [{ product: 'remote-agent', versions: ['0.5.3'], why: 'pierde el código del error al envolverlo', fix: 'sube a 0.5.4' }]
   const r = check({ mine: boveda, theirs: agente, broken: rotas })
-  assert.equal(r.ok, false)
+  assert.equal(r.compatible, false)
   assert.equal(r.code, BROKEN_PEER)
   assert.match(r.reason, /pierde el código del error/, 'el porqué viaja con el rechazo')
   assert.match(r.reason, /sube a 0\.5\.4/, 'y qué hacer')
@@ -68,22 +68,31 @@ test('la lista de rotas admite exactas, listas y rangos — el MISMO comparador'
 })
 
 /**
- * ESTRICTO EN ESTA ETAPA (dueño, 2026-09-04). Quien no dice qué es, no trabaja. Nada de
- * ventana de gracia: la mitad del valor de esto es obligar a que todas las piezas
- * declaren, y una tolerancia consigue justo lo contrario — que nadie se entere de que le
- * falta declarar.
+ * INFORMA, NO BLOQUEA (dueño, 2026-09-04). El dictamen se enseña y se pega a los errores;
+ * nadie debe convertirlo en un «no atiendo». Bloquear sería código nuevo decidiendo si algo
+ * funciona, y en los tres incidentes que originaron esto lo que faltó fue enterarse.
  */
-test('quien no dice qué es, no trabaja', () => {
+test('quien no dice qué es sale como no declarado, y eso es un dictamen', () => {
   const r = check({ mine: boveda, theirs: null })
-  assert.equal(r.ok, false)
+  assert.equal(r.compatible, false)
   assert.equal(r.code, UNDECLARED)
+  assert.equal(r.peer, null)
 })
 
-test('estricto es el DEFAULT, y aflojarlo es una decisión explícita', () => {
-  assert.equal(STRICT_BY_DEFAULT, true, 'se relaja cuando el producto esté estable, no antes')
-  const flojo = check({ mine: boveda, theirs: null, strict: false })
-  assert.equal(flojo.ok, true)
-  assert.equal(flojo.code, UNDECLARED, 'aunque pase, queda dicho que no declaró')
+/**
+ * EL QUE DE VERDAD AHORRA EL DÍA PERDIDO: el aviso pegado al error que ya ocurre. El caso
+ * real fue `invalid cert: no-acta` — verdad, y no la causa. La causa era la versión.
+ */
+test('el dictamen se le pega al error que ya ocurre', () => {
+  const v = check({ mine: boveda, theirs: viejo })
+  const con = annotate('invalid cert: no-acta', v)
+  assert.ok(con.startsWith('invalid cert: no-acta'), 'el mensaje original no se toca')
+  assert.match(con, /heads up:/)
+  assert.match(con, /update remote-agent/)
+
+  const bien = check({ mine: boveda, theirs: agente })
+  assert.equal(annotate('otra cosa', bien), 'otra cosa', 'si cuadran no se ensucia el error')
+  assert.equal(annotate('otra cosa', null), 'otra cosa')
 })
 
 test('el aviso dice qué eres tú, qué soy yo y qué hacer', () => {

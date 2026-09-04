@@ -100,14 +100,14 @@ test('lo que suma el aviso frena de verdad', async () => {
   const mia = declare({ product: 'vaultd', version: '0.106.2', protocol: 3, speaks: [3] })
   const suya = declare({ product: 'content', version: '0.3.3', protocol: 3, speaks: [3] })
 
-  assert.equal(check({ mine: mia, theirs: suya }).ok, true, 'antes del aviso trabajan')
+  assert.equal(check({ mine: mia, theirs: suya }).compatible, true, 'antes del aviso trabajan')
 
   const aviso = await signAdvisory({
     seq: 1, privateJwk: release.priv,
     broken: [{ product: 'content', versions: ['0.3.3'], why: 'no sella', fix: 'sube a 0.4.0' }]
   })
   const r = check({ mine: mia, theirs: suya, broken: brokenNow({ baked: [], advisory: aviso }) })
-  assert.equal(r.ok, false)
+  assert.equal(r.compatible, false)
   assert.equal(r.code, BROKEN_PEER)
   assert.match(r.reason, /no sella/)
 })

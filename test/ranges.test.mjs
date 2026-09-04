@@ -28,6 +28,18 @@ test('las cuatro formas admitidas', () => {
   assert.equal(satisfies('9.9.9', '*'), true)
 })
 
+test('rangos ABIERTOS: de esta version en adelante', () => {
+  assert.equal(satisfies('0.106.2', '0.106.0+'), true)
+  assert.equal(satisfies('0.106.0', '0.106.0+'), true, 'la propia entra')
+  assert.equal(satisfies('0.105.9', '0.106.0+'), false)
+  assert.equal(satisfies('9.9.9', '0.106.0+'), true)
+  assert.equal(satisfies('0.106.2', '0.106.0+'), satisfies('0.106.2', '>=0.106.0'),
+    'es el mismo rango dicho en el otro idioma')
+
+  assert.equal(satisfies('9.9.9', '0.100.0 - *'), true, 'abierto por arriba')
+  assert.equal(satisfies('0.99.0', '0.100.0 - *'), false)
+})
+
 test('una lista es un O', () => {
   assert.equal(satisfies('0.4.2', ['>=0.5.0', '0.4.2']), true)
   assert.equal(satisfies('0.4.1', ['>=0.5.0', '0.4.2']), false)

@@ -76,19 +76,37 @@ const MIS_ROTAS = [
 ]
 ```
 
-### Estricto ahora, y se relaja cuando el producto esté estable
+### Informa, no bloquea
 
-Decidido por el dueño el 2026-09-04: *«la incompatibilidad debe ser estricta en esta etapa
-de dev, y vamos a irla relajando mientras se estabilice el producto»*.
+Y es mejor diseño, por cuatro razones que conviene tener escritas para no volver atrás:
 
-Estricto significa **quien no dice qué es, no trabaja**. Sin ventana de gracia: la mitad
-del valor de esto es obligar a que todas las piezas declaren, y una tolerancia consigue
-justo lo contrario — que nadie se entere de que le falta declarar. Se afloja con
-`strict: false`, que es una decisión de producto, no un default que se cuela.
+- **No hay interruptor remoto.** Un aviso que solo informa se puede firmar y repartir sin
+  que nadie pueda dejar a otro sin bóveda desde fuera.
+- **No hay trampa de orden.** Si bloqueara, el día que una pieza empieza a comprobar
+  dejaría de hablar con todas las que aún no anuncian: habría que desplegar en un orden
+  exacto. Informando se enciende donde sea y cuando sea.
+- **Falla del lado seguro.** Bloquear es código nuevo decidiendo si algo funciona: un rango
+  mal escrito o una errata en un manifiesto pasaría de aviso falso a caída real.
+- **Es lo que dicen los tres incidentes** de arriba: lo que faltó fue **enterarse**, no
+  parar. Parar no habría arreglado ninguno.
 
-⚠️ **El orden de despliegue no es un detalle.** El día que una pieza empieza a comprobar,
-deja de hablar con todo el que aún no anuncia. Así que: **primero anunciar en todas partes,
-encender la comprobación después.**
+Lo que se pierde, y se dice: un par realmente incompatible sigue medio funcionando. Pero
+medio funcionando **con un cartel que explica por qué** es otra cosa.
+
+**Quien consuma esto no debe convertir un `compatible: false` en un «no atiendo».** Si
+algún día se decide bloquear, se decide arriba y se escribe allí.
+
+### Pégale el dictamen al error que ya ocurre
+
+Es lo que de verdad ahorra el día perdido. `@dotrino/env` pedía `^0.33.2` con la librería
+en 0.60 y enrolar contestaba `invalid cert: no-acta` — verdad, y no la causa.
+
+```js
+throw new Error(annotate('invalid cert: no-acta', verdict))
+// invalid cert: no-acta — heads up: vault 0.33.2 … update vault
+```
+
+El mensaje original no se toca: se le añade detrás.
 
 ### Decide la versión que ENTRA
 

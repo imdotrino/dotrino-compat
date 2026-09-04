@@ -30,23 +30,29 @@ export const BROKEN_PEER = 'broken-peer'
 export const UNDECLARED = 'undeclared'
 
 /**
- * ESTRICTO MIENTRAS ESTO SE ESTÁ HACIENDO (dueño, 2026-09-04): *«la incompatibilidad debe
- * ser estricta en esta etapa de dev, y vamos a irla relajando mientras se estabilice el
- * producto»*.
+ * ESTO INFORMA, NO BLOQUEA (dueño, 2026-09-04, corrigiendo el punto 3 del mismo día:
+ * *«quizás el aviso de incompatibilidad no debería ser bloqueante, pero sí visible»*).
  *
- * Estricto significa: **quien no dice qué es, no trabaja**. No hay ventana de gracia ni
- * fecha de caducidad — eso sería un repliegue, y además el que menos conviene ahora: la
- * mitad del valor de esto es obligar a que todas las piezas declaren, y una tolerancia
- * hace justo lo contrario, que nadie se entere de que le falta declarar.
+ * Y es mejor diseño, por cuatro razones que conviene tener escritas para no volver atrás:
  *
- * Se relaja con `strict: false`, y eso es una decisión de producto que se toma cuando esté
- * estable — no un default que se cuela.
+ *   · **No hay interruptor remoto.** Un aviso que solo informa se puede firmar y repartir
+ *     sin que nadie pueda dejar a otro sin bóveda desde fuera.
+ *   · **No hay trampa de orden.** Si bloqueara, el día que una pieza empieza a comprobar
+ *     dejaría de hablar con todas las que aún no anuncian: habría que desplegar en un orden
+ *     exacto. Informando se enciende donde sea y cuando sea.
+ *   · **Falla del lado seguro.** Bloquear es código nuevo decidiendo si algo funciona: un
+ *     rango mal escrito o una errata en un manifiesto pasaría de aviso falso a caída real.
+ *   · **Es lo que dicen los tres incidentes.** En el apagón del 1-2 de septiembre, en el
+ *     `^0.33.2` y en la bóveda muda, lo que faltó fue ENTERARSE, no parar. Parar no habría
+ *     arreglado ninguno.
  *
- * ⚠️ **Consecuencia operativa, que no es un detalle:** el día que una pieza empieza a
- * comprobar, deja de hablar con todo el que aún no anuncia. Así que el orden de
- * despliegue es **primero anunciar en todas partes, y encender la comprobación después**.
+ * Lo que se pierde y se dice: un par realmente incompatible sigue medio funcionando. Pero
+ * medio funcionando **con un cartel que explica por qué** es otra cosa — y lo que no cuadra
+ * falla solo, con el aviso pegado al error (`annotate`).
+ *
+ * Quien consuma esto **no debe** convertir un `compatible: false` en un «no atiendo». Si
+ * algún día se decide bloquear, se decide arriba y se escribe allí, no aquí.
  */
-export const STRICT_BY_DEFAULT = true
 
 /** ¿Tiene forma de anuncio? No dice si es compatible, solo si se puede juzgar. */
 export function isDeclaration (d) {
@@ -85,44 +91,41 @@ export function isBroken (lista, { product, version }) {
 }
 
 /**
- * ¿TE ACEPTO?
+ * ¿ESTA PAREJA CUADRA?
  *
- * **DECIDE LA VERSIÓN QUE ENTRA, no las dos** (dueño, 2026-09-04): *«el que define si es
- * compatible o no es la versión que entra, ya que la versión antigua de un producto no
- * tiene idea con qué es o no compatible»*. Y es exacto: una build de hace tres meses no
- * sabe nada de lo que vino después, así que preguntarle su opinión es preguntarle a quien
- * no puede saber. Quien juzga es quien tiene la lista al día — el que llega.
+ * Devuelve un DICTAMEN, no un permiso: `compatible` dice si cuadran, y nadie debe usarlo
+ * para dejar de atender (ver arriba). Se enseña, se registra y se le pega a los errores.
  *
- * Por eso esto NO es simétrico y no debe serlo: miro si YO te entiendo y si TÚ estás en mi
- * lista de rotas. Lo que tú creas de mí no entra en la cuenta.
+ * **JUZGA EL QUE ENTRA** (dueño, 2026-09-04): *«el que define si es compatible o no es la
+ * versión que entra, ya que la versión antigua de un producto no tiene idea con qué es o no
+ * compatible»*. Exacto: una build de hace tres meses no sabe nada de lo que vino después.
+ * Así que esto NO es simétrico — miro si YO te entiendo y si TÚ estás en mi lista de rotas;
+ * lo que tú creas de mí no entra en la cuenta.
  *
- * Y por eso el punto 3 del dueño es la otra mitad y no un adorno: si el viejo no puede
- * juzgar, tampoco puede enterarse solo. **El que rechaza es el único que puede decírselo**,
- * y por eso se avisa en vez de callar (`incompatibleNotice`).
+ * Y de ahí sale por qué avisar es la otra mitad: si el viejo no puede juzgar, tampoco puede
+ * enterarse solo. El que ve la incompatibilidad es el único que puede decírselo.
  *
- * @param {object}  o.mine     mi declaración
- * @param {object}  o.theirs   la del otro (o null si no dijo nada)
- * @param {Array}   [o.broken] mi lista de versiones rotas (código + aviso de la red)
- * @param {boolean} [o.strict] `false` afloja lo de «quien no declara no trabaja»
- * @returns {{ok:boolean, code:string, reason:string, peer:object|null}}
+ * @param {object} o.mine     mi declaración
+ * @param {object} o.theirs   la del otro (o null si no dijo nada)
+ * @param {Array}  [o.broken] mi lista de rotas (la del código más la del aviso de la red)
+ * @returns {{compatible:boolean, code:string, reason:string, peer:object|null}}
  */
-export function check ({ mine, theirs, broken = [], strict = STRICT_BY_DEFAULT } = {}) {
+export function check ({ mine, theirs, broken = [] } = {}) {
   if (!isDeclaration(mine)) throw new Error('compat: my own declaration is not valid')
 
   if (!isDeclaration(theirs)) {
     return {
-      ok: !strict,
+      compatible: false,
       code: UNDECLARED,
       peer: null,
-      reason: 'the other side does not say what it is or which version it runs' +
-        (strict ? '' : ' (tolerated: this side is not strict)')
+      reason: 'the other side does not say what it is or which version it runs'
     }
   }
 
   const roto = isBroken(broken, theirs)
   if (roto) {
     return {
-      ok: false,
+      compatible: false,
       code: BROKEN_PEER,
       peer: theirs,
       reason: `${theirs.product} ${theirs.version} is known to be broken: ${roto.why || 'no reason recorded'}` +
@@ -130,11 +133,9 @@ export function check ({ mine, theirs, broken = [], strict = STRICT_BY_DEFAULT }
     }
   }
 
-  // SOLO MI LADO DECIDE: si entiendo su protocolo, trabajamos. Lo que él entienda del mío
-  // no se pregunta — no puede saberlo si es más viejo que yo.
   if (!mine.speaks.includes(theirs.protocol)) {
     return {
-      ok: false,
+      compatible: false,
       code: INCOMPATIBLE_PROTOCOL,
       peer: theirs,
       reason: `${mine.product} ${mine.version} speaks protocol ${mine.speaks.join(', ')} and ` +
@@ -142,7 +143,25 @@ export function check ({ mine, theirs, broken = [], strict = STRICT_BY_DEFAULT }
     }
   }
 
-  return { ok: true, code: OK, peer: theirs, reason: '' }
+  return { compatible: true, code: OK, peer: theirs, reason: '' }
+}
+
+/**
+ * PEGA EL AVISO AL ERROR QUE YA OCURRE, y esto es lo que de verdad ahorra el día perdido.
+ *
+ * El caso real: `@dotrino/env` pedía `^0.33.2` con la librería en 0.60, y enrolar contestaba
+ * `invalid cert: no-acta`. Es verdad y no es la causa — la causa era la versión, y encontrarlo
+ * costó horas. Con esto el mismo error sale:
+ *
+ *   invalid cert: no-acta — heads up: vault 0.33.2 against vaultd 0.106.2 …
+ *
+ * El mensaje original no se toca: se le añade detrás. Nadie que empareje por texto se rompe
+ * si compara por prefijo, y quien compare por `code` no se entera (ver «los errores son un
+ * contrato»).
+ */
+export function annotate (message, verdict) {
+  if (!verdict || verdict.compatible !== false) return message
+  return `${message} — heads up: ${verdict.reason}`
 }
 
 /**
@@ -166,4 +185,4 @@ export function incompatibleNotice ({ mine, theirs, verdict }) {
   }
 }
 
-export default { declare, check, isBroken, isDeclaration, incompatibleNotice, OK, INCOMPATIBLE_PROTOCOL, BROKEN_PEER, UNDECLARED, STRICT_BY_DEFAULT }
+export default { declare, check, isBroken, isDeclaration, incompatibleNotice, annotate, OK, INCOMPATIBLE_PROTOCOL, BROKEN_PEER, UNDECLARED }

@@ -15,8 +15,10 @@
  * Formas admitidas, y son todas:
  *
  *     "0.106.2"              exacta
- *     ">=0.106.0"            >=  >  <=  <
+ *     "0.106.0+"             ABIERTO hacia arriba: de esa en adelante
+ *     ">=0.106.0"            lo mismo, en el otro idioma. También >  <=  <
  *     "0.100.0 - 0.106.2"    intervalo, extremos incluidos
+ *     "0.100.0 - *"          abierto por el extremo de arriba
  *     "*"                    cualquiera
  *     [">=0.5.0", "0.4.2"]   una lista es un O
  */
@@ -61,11 +63,21 @@ export function satisfies (version, range) {
   if (r === '*') return true
   if (!parseVersion(version)) return false
 
+  // ABIERTO HACIA ARRIBA: «0.106.0+» es «de esa en adelante». Es la forma que más se usa
+  // en un manifiesto —«esto y lo que venga»— y se lee mejor que `>=` cuando hay veinte
+  // líneas seguidas (dueño, 2026-09-04).
+  if (r.endsWith('+')) {
+    try { return compareVersions(version, r.slice(0, -1).trim()) >= 0 } catch (_) { return false }
+  }
+
   const guion = r.split(' - ')
   if (guion.length === 2) {
+    const desde = guion[0].trim()
+    const hasta = guion[1].trim()
     try {
-      return compareVersions(version, guion[0].trim()) >= 0 &&
-             compareVersions(version, guion[1].trim()) <= 0
+      if (compareVersions(version, desde) < 0) return false
+      // El extremo de arriba también puede quedar abierto: «0.100.0 - *».
+      return hasta === '*' ? true : compareVersions(version, hasta) <= 0
     } catch (_) { return false }
   }
 

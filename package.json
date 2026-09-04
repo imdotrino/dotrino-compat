@@ -1,6 +1,6 @@
 {
   "name": "@dotrino/compat",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Qué versión eres y si podemos trabajar: el contrato de compatibilidad del ecosistema Dotrino.",
   "license": "MIT",
   "type": "module",
