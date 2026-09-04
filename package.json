@@ -1,0 +1,27 @@
+{
+  "name": "@dotrino/compat",
+  "version": "0.1.0",
+  "description": "Qué versión eres y si podemos trabajar: el contrato de compatibilidad del ecosistema Dotrino.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imdotrino/dotrino-compat.git"
+  },
+  "keywords": [
+    "dotrino",
+    "compatibility",
+    "versioning"
+  ]
+}
