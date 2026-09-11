@@ -23,8 +23,12 @@ reintenta para siempre. El que atiende no sabe que le están hablando.
 1. **El administrador muestra las versiones que se están corriendo.**
 2. **Una versión nueva sale con su lista de compatibilidad.** Si se detecta un fallo en
    una versión, se marca incompatible.
-3. **Las incompatibles se comunican, pero solo para avisar de la incompatibilidad**, y no
-   trabajan hasta que se resuelva.
+3. **La incompatibilidad se comunica y se VE, pero NO bloquea** (corregido por el dueño
+   el mismo día: *«quizás el aviso de incompatibilidad no debería ser bloqueante, pero sí
+   visible»*). Bloquear sería código nuevo decidiendo si algo funciona, y en los tres
+   incidentes que originaron esto lo que faltó fue **enterarse**, no parar. El aviso va en
+   el administrador, en la lista de dispositivos de la bóveda, y **pegado al error que ya
+   ocurre**, que es donde se pierde el tiempo.
 
 Aplica a **todos los productos** del ecosistema.
 
@@ -38,9 +42,10 @@ const mine = declare({ product: 'vaultd', version: pkg.version, protocol: 3, spe
 
 // Lo que decido cuando llega alguien.
 const v = check({ mine, theirs: p.v, broken: MIS_ROTAS })
-if (!v.ok) {
-  responder(incompatibleNotice({ mine, theirs: p.v, verdict: v }))   // se avisa…
-  return                                                            // …y no se trabaja
+if (!v.compatible) {
+  // Se AVISA, y se sigue. El que rechaza es el único que puede enterar al otro: una
+  // build de hace tres meses no sabe nada de lo que vino después.
+  responder(incompatibleNotice({ mine, theirs: p.v, verdict: v }))
 }
 ```
 
