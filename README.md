@@ -135,3 +135,7 @@ consumidor (`PENDIENTES.md`, «pilar anidado»).
 ## Licencia
 
 MIT.
+
+## Documentación de uso
+
+Está en el wiki: <https://wiki.dotrino.com/desarrollo/versiones/>
