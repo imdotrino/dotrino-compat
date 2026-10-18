@@ -77,7 +77,7 @@ test('solo hacia adelante: un aviso viejo no deshace uno nuevo', async () => {
 
   const replay = await adoptAdvisory({ current: est.advisory, incoming: uno, publickey: release.pub })
   assert.equal(replay.adopted, false)
-  assert.equal(replay.reason, 'no-es-mas-nuevo')
+  assert.equal(replay.reason, 'not-newer')
   assert.equal(replay.advisory.seq, 2)
 })
 

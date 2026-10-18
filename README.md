@@ -125,6 +125,22 @@ mi lista de rotas; lo que tú creas de mí no entra en la cuenta.
 Y de ahí sale por qué el punto 3 es la otra mitad y no un adorno: si el viejo no puede
 juzgar, tampoco puede enterarse solo. **El que rechaza es el único que puede decírselo.**
 
+### El aviso firmado (`@dotrino/compat/advisory`)
+
+La lista de rotas que vale hoy es la del código **más** la de un aviso firmado por la llave
+de release (`brokenNow`). `adoptAdvisory({ current, incoming, publickey })` decide si se
+adopta el que llega y lo dice en `reason`, siempre con un identificador (§8.1, en inglés):
+
+| `reason` | Qué pasó |
+|---|---|
+| `first` | no había aviso y este se adopta |
+| `newer` | trae un `seq` mayor y se adopta |
+| `not-newer` | `seq` igual o menor: se conserva el vigente |
+| `invalid-signature` | no lo firma la llave que yo digo |
+| `not-an-advisory` | lo que llegó no tiene forma de aviso |
+
+Un aviso solo **suma** rotas: no puede desmarcar lo que la build ya da por roto.
+
 ## Qué NO hace
 
 No tiene red, ni disco, ni cripto: son funciones puras. Decidir es de aquí; anunciar y
