@@ -49,6 +49,22 @@ if (!v.compatible) {
 }
 ```
 
+### Los permisos que necesitas del acta (`needs`)
+
+Una pieza dice también **qué permisos del acta necesita** para funcionar, en el mismo anuncio
+(dueño, 2026-10-27). Quien la atiende —la bóveda— lo compara con lo que el acta le da y
+**enseña lo que falta** en la fila del aparato. Igual que la versión: informa, no concede ni
+bloquea; dar el permiso es del dueño.
+
+```js
+const mine = declare({ product: 'accounts', version: pkg.version, protocol: 1, needs: ['secrets', 'sign'] })
+missingCaps(mine, ['secrets'])   // → ['sign']
+```
+
+Los nombres son los del acta (`sign`, `read`, `store`, `secrets`, `admin`, `approve`…), no los
+de la CLI (`firma`, `lee`…). `@dotrino/remote-agent` añade `sign` solo: sin él ningún agente
+abre sesiones.
+
 ### Es política del CÓDIGO, no de la cuenta
 
 Decidido por el dueño el 2026-09-04: **la compatibilidad la deciden los que desarrollan.**

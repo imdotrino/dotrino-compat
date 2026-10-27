@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  declare, check, isBroken, incompatibleNotice, annotate,
+  declare, check, isBroken, incompatibleNotice, annotate, isDeclaration, missingCaps,
   OK, UNDECLARED, BROKEN_PEER, INCOMPATIBLE_PROTOCOL
 } from '../src/index.js'
 
@@ -106,4 +106,21 @@ test('el aviso dice qué eres tú, qué soy yo y qué hacer', () => {
 
 test('mi propia declaración rota es un error mío, no un «no»', () => {
   assert.throws(() => check({ mine: { product: 'x' }, theirs: agente }), /my own declaration/)
+})
+
+test('needs: los permisos del acta que la pieza necesita viajan en el anuncio, ordenados y sin repetir', () => {
+  const d = declare({ product: 'accounts', version: '0.7.0', protocol: 1, needs: ['secrets', 'sign', 'sign'] })
+  assert.deepEqual(d.needs, ['secrets', 'sign'])
+  assert.equal(isDeclaration(d), true)
+  assert.equal('needs' in declare({ product: 'x', version: '1.0.0', protocol: 1 }), false, 'sin needs, el anuncio queda como antes')
+  assert.throws(() => declare({ product: 'x', version: '1.0.0', protocol: 1, needs: 'sign' }), /needs/)
+  assert.equal(isDeclaration({ ...d, needs: [1] }), false)
+})
+
+test('missingCaps: lo que se declaró necesitar y el acta no da', () => {
+  const d = declare({ product: 'accounts', version: '0.7.0', protocol: 1, needs: ['secrets', 'sign'] })
+  assert.deepEqual(missingCaps(d, ['secrets', 'unattended']), ['sign'])
+  assert.deepEqual(missingCaps(d, ['secrets', 'sign']), [])
+  assert.deepEqual(missingCaps(declare({ product: 'x', version: '1.0.0', protocol: 1 }), []), [], 'quien no declara no falta nada')
+  assert.deepEqual(missingCaps(null, []), [])
 })
